@@ -1,7 +1,9 @@
 "use strict";
 
 const crypto = require("crypto");
+const fs = require("fs");
 const http = require("http");
+const path = require("path");
 
 const PORT = Number(process.env.PORT || 3000);
 const ALLOW_MOCK = process.env.ALLOW_MOCK === "1";
@@ -20,10 +22,14 @@ const SERVICE_NAME = process.env.SERVICE_NAME || "코리아스픽스 국민대�
 const OPERATOR_NAME = process.env.OPERATOR_NAME || "코리아스픽스";
 const OPERATOR_CONTACT = process.env.OPERATOR_CONTACT || "운영 담당자 이메일을 입력해 주세요";
 const BUSINESS_INFO = process.env.BUSINESS_INFO || "사업자 정보는 계약 주체 기준으로 입력해 주세요.";
+const RESPONSES_FILE = process.env.RESPONSES_FILE || path.join(__dirname, "data", "responses.jsonl");
+const DATABASE_URL = process.env.DATABASE_URL || "";
+const SURVEY_SCHEMA = JSON.parse(fs.readFileSync(path.join(__dirname, "survey-schema.json"), "utf8"));
 
 const usedPersonHashes = new Set();
 const gateTokens = new Map();
 const surveyResponses = [];
+let pgPoolPromise;
 
 function getPortOneConfigStatus() {
   const missing = [];
@@ -67,6 +73,175 @@ function appendGateToken(url, token) {
   const parsed = new URL(url);
   parsed.searchParams.set("gateToken", token);
   return parsed.toString();
+}
+
+function appendSurveyArchive(record) {
+  fs.mkdirSync(path.dirname(RESPONSES_FILE), { recursive: true });
+  fs.appendFileSync(RESPONSES_FILE, `${JSON.stringify(record)}\n`, "utf8");
+}
+
+function readSurveyArchive() {
+  if (!fs.existsSync(RESPONSES_FILE)) return [];
+  return fs.readFileSync(RESPONSES_FILE, "utf8")
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => JSON.parse(line));
+}
+
+function csvCell(value) {
+  return `"${String(value ?? "").replaceAll('"', '""')}"`;
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function getSurveyQuestions() {
+  return SURVEY_SCHEMA.sections.flatMap((section) => section.questions.map((question) => ({
+    ...question,
+    sectionId: section.id,
+    sectionTitle: section.title
+  })));
+}
+
+function getQuestionById(questionId) {
+  return getSurveyQuestions().find((question) => question.id === questionId);
+}
+
+function normalizeAnswer(question, value) {
+  if (question.type === "checkbox") {
+    if (Array.isArray(value)) return value.map((item) => String(item).trim()).filter(Boolean);
+    if (value === undefined || value === null || value === false) return [];
+    return [String(value).trim()].filter(Boolean);
+  }
+  return String(value ?? "").trim();
+}
+
+function validateSurveyAnswers(answers) {
+  const normalized = {};
+  for (const question of getSurveyQuestions()) {
+    const value = normalizeAnswer(question, answers[question.id]);
+    normalized[question.id] = value;
+    if (question.required) {
+      const hasValue = Array.isArray(value) ? value.length > 0 : Boolean(value);
+      if (!hasValue) {
+        return {
+          ok: false,
+          message: `필수 문항을 입력해 주세요: ${question.label}`
+        };
+      }
+    }
+  }
+
+  const consent = normalized.privacy_collection_agree || [];
+  if (!Array.isArray(consent) || !consent.includes("동의합니다")) {
+    return { ok: false, message: "개인정보 수집 및 이용 동의가 필요합니다." };
+  }
+
+  return { ok: true, answers: normalized };
+}
+
+async function getPgPool() {
+  if (!DATABASE_URL) return null;
+  if (!pgPoolPromise) {
+    pgPoolPromise = (async () => {
+      const { Pool } = require("pg");
+      const pool = new Pool({
+        connectionString: DATABASE_URL,
+        ssl: DATABASE_URL.includes("localhost") ? false : { rejectUnauthorized: false }
+      });
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS survey_responses (
+          id BIGSERIAL PRIMARY KEY,
+          submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          age INTEGER,
+          gender TEXT,
+          respondent_name TEXT,
+          respondent_phone TEXT,
+          privacy_consent BOOLEAN NOT NULL DEFAULT FALSE,
+          answers JSONB NOT NULL DEFAULT '{}'::jsonb,
+          region TEXT,
+          topic TEXT,
+          opinion TEXT,
+          join_roundtable BOOLEAN NOT NULL DEFAULT FALSE
+        )
+      `);
+      await pool.query(`ALTER TABLE survey_responses ADD COLUMN IF NOT EXISTS respondent_name TEXT`);
+      await pool.query(`ALTER TABLE survey_responses ADD COLUMN IF NOT EXISTS respondent_phone TEXT`);
+      await pool.query(`ALTER TABLE survey_responses ADD COLUMN IF NOT EXISTS privacy_consent BOOLEAN NOT NULL DEFAULT FALSE`);
+      await pool.query(`ALTER TABLE survey_responses ADD COLUMN IF NOT EXISTS answers JSONB NOT NULL DEFAULT '{}'::jsonb`);
+      await pool.query(`ALTER TABLE survey_responses ALTER COLUMN region DROP NOT NULL`);
+      await pool.query(`ALTER TABLE survey_responses ALTER COLUMN topic DROP NOT NULL`);
+      await pool.query(`ALTER TABLE survey_responses ALTER COLUMN opinion DROP NOT NULL`);
+      return pool;
+    })();
+  }
+  return pgPoolPromise;
+}
+
+async function saveSurveyResponse(record) {
+  if (DATABASE_URL) {
+    try {
+      const pool = await getPgPool();
+      const result = await pool.query(
+        `INSERT INTO survey_responses
+          (submitted_at, age, gender, respondent_name, respondent_phone, privacy_consent, answers, region, topic, opinion, join_roundtable)
+         VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $10, $11)
+         RETURNING id, submitted_at AS "submittedAt", age, gender,
+          respondent_name AS "respondentName",
+          respondent_phone AS "respondentPhone",
+          privacy_consent AS "privacyConsent",
+          answers, region, topic, opinion, join_roundtable AS "joinRoundtable"`,
+        [
+          record.submittedAt,
+          record.age,
+          record.gender,
+          record.respondentName,
+          record.respondentPhone,
+          record.privacyConsent,
+          JSON.stringify(record.answers || {}),
+          record.region || null,
+          record.topic || null,
+          record.opinion || null,
+          record.joinRoundtable || false
+        ]
+      );
+      return result.rows[0];
+    } catch (error) {
+      console.error("Postgres archive failed; falling back to JSONL", error);
+    }
+  }
+
+  appendSurveyArchive(record);
+  return record;
+}
+
+async function readSurveyResponses() {
+  if (DATABASE_URL) {
+    try {
+      const pool = await getPgPool();
+      const result = await pool.query(
+        `SELECT id, submitted_at AS "submittedAt", age, gender,
+          respondent_name AS "respondentName",
+          respondent_phone AS "respondentPhone",
+          privacy_consent AS "privacyConsent",
+          answers, region, topic, opinion, join_roundtable AS "joinRoundtable"
+         FROM survey_responses
+         ORDER BY id DESC
+         LIMIT 1000`
+      );
+      return result.rows;
+    } catch (error) {
+      console.error("Postgres read failed; falling back to JSONL", error);
+    }
+  }
+
+  return readSurveyArchive();
 }
 
 function cleanupTokens() {
@@ -247,24 +422,29 @@ async function handleSubmit(req, res) {
       return json(res, 403, { ok: false, message: "유효한 본인인증 토큰이 없습니다. 처음부터 다시 진행해 주세요." });
     }
 
-    const required = ["region", "topic", "opinion"];
-    for (const field of required) {
-      if (!String(body[field] || "").trim()) {
-        return json(res, 400, { ok: false, message: "필수 설문 문항을 모두 입력해 주세요." });
-      }
+    const validated = validateSurveyAnswers(body.answers || {});
+    if (!validated.ok) {
+      return json(res, 400, { ok: false, message: validated.message });
     }
 
-    tokenEntry.used = true;
-    surveyResponses.push({
+    const record = {
       id: surveyResponses.length + 1,
       submittedAt: new Date().toISOString(),
       age: tokenEntry.profile.age,
       gender: tokenEntry.profile.gender,
-      region: String(body.region).trim(),
-      topic: String(body.topic).trim(),
-      opinion: String(body.opinion).trim(),
-      joinRoundtable: Boolean(body.joinRoundtable)
-    });
+      respondentName: String(validated.answers.respondent_name || "").trim(),
+      respondentPhone: String(validated.answers.respondent_phone || "").replace(/\D/g, ""),
+      privacyConsent: true,
+      answers: validated.answers,
+      region: validated.answers.SQ3 || "",
+      topic: validated.answers.D1 || "",
+      opinion: validated.answers.D4 || validated.answers.D5_2 || "",
+      joinRoundtable: false
+    };
+
+    const savedRecord = await saveSurveyResponse(record);
+    tokenEntry.used = true;
+    surveyResponses.push(savedRecord);
 
     return json(res, 200, { ok: true, message: "설문 응답이 제출되었습니다." });
   } catch (error) {
@@ -273,11 +453,34 @@ async function handleSubmit(req, res) {
   }
 }
 
-function handleResponses(req, res) {
+async function handleResponses(req, res) {
+  const archivedResponses = await readSurveyResponses();
   json(res, 200, {
-    count: surveyResponses.length,
-    responses: surveyResponses
+    count: archivedResponses.length,
+    responses: archivedResponses
   });
+}
+
+async function handleResponsesCsv(req, res) {
+  const archivedResponses = await readSurveyResponses();
+  const questionIds = getSurveyQuestions().map((question) => question.id);
+  const header = ["id", "submittedAt", "age", "gender", "respondentName", "respondentPhone", "privacyConsent", ...questionIds];
+  const rows = archivedResponses.map((row) => {
+    const answers = row.answers || {};
+    return header.map((key) => {
+      if (questionIds.includes(key)) {
+        const value = answers[key];
+        return csvCell(Array.isArray(value) ? value.join("; ") : value);
+      }
+      return csvCell(row[key]);
+    }).join(",");
+  });
+  const body = `${header.join(",")}\n${rows.join("\n")}\n`;
+  res.writeHead(200, {
+    "Content-Type": "text/csv; charset=utf-8",
+    "Content-Disposition": 'attachment; filename="survey-responses.csv"'
+  });
+  res.end(body);
 }
 
 function handleConfig(req, res) {
@@ -288,7 +491,9 @@ function handleConfig(req, res) {
     minAge: MIN_AGE,
     maxAge: MAX_AGE,
     portOne: getPortOneConfigStatus(),
-    externalSurveyUrl: EXTERNAL_SURVEY_URL
+    externalSurveyUrl: EXTERNAL_SURVEY_URL,
+    responsesFile: RESPONSES_FILE,
+    storage: DATABASE_URL ? "postgres" : "jsonl"
   });
 }
 
@@ -638,8 +843,90 @@ function refundPage() {
   `);
 }
 
+function normalizeSurveyMode(selectedSurveyMode = SURVEY_MODE) {
+  if (selectedSurveyMode === "EXTERNAL" || selectedSurveyMode === "HYBRID") return selectedSurveyMode;
+  return "INTERNAL";
+}
+
+function renderSurveyQuestion(question) {
+  const id = `q_${question.id}`;
+  const name = `q_${question.id}`;
+  const required = question.required ? "required" : "";
+  const requiredMark = question.required ? " <span class=\"required\">필수</span>" : "";
+  const placeholder = question.placeholder ? ` placeholder="${escapeHtml(question.placeholder)}"` : "";
+  const label = `${escapeHtml(question.label)}${requiredMark}`;
+
+  if (question.type === "textarea") {
+    return `<label for="${escapeHtml(id)}">${label}
+      <textarea id="${escapeHtml(id)}" name="${escapeHtml(name)}" data-question-id="${escapeHtml(question.id)}" ${required}${placeholder}></textarea>
+    </label>`;
+  }
+
+  if (question.type === "text") {
+    return `<label for="${escapeHtml(id)}">${label}
+      <input id="${escapeHtml(id)}" name="${escapeHtml(name)}" data-question-id="${escapeHtml(question.id)}" type="text" ${required}${placeholder}>
+    </label>`;
+  }
+
+  if (question.type === "radio") {
+    const options = question.options.map((option, index) => {
+      const optionId = `${id}_${index}`;
+      return `<label class="choice" for="${escapeHtml(optionId)}">
+        <input id="${escapeHtml(optionId)}" name="${escapeHtml(name)}" data-question-id="${escapeHtml(question.id)}" type="radio" value="${escapeHtml(option)}" ${required}>
+        <span>${escapeHtml(option)}</span>
+      </label>`;
+    }).join("");
+    return `<fieldset class="question-group">
+      <legend>${label}</legend>
+      <div class="choices">${options}</div>
+    </fieldset>`;
+  }
+
+  if (question.type === "checkbox") {
+    const options = question.options.map((option, index) => {
+      const optionId = `${id}_${index}`;
+      return `<label class="choice" for="${escapeHtml(optionId)}">
+        <input id="${escapeHtml(optionId)}" name="${escapeHtml(name)}" data-question-id="${escapeHtml(question.id)}" type="checkbox" value="${escapeHtml(option)}">
+        <span>${escapeHtml(option)}</span>
+      </label>`;
+    }).join("");
+    return `<fieldset class="question-group">
+      <legend>${label}</legend>
+      <div class="choices">${options}</div>
+    </fieldset>`;
+  }
+
+  return "";
+}
+
+function renderInternalSurveyForm(effectiveSurveyMode) {
+  const sections = SURVEY_SCHEMA.sections.map((section) => `
+    <div class="survey-block">
+      <h3>${escapeHtml(section.title)}</h3>
+      ${section.description ? `<p>${escapeHtml(section.description)}</p>` : ""}
+      <div class="question-list">
+        ${section.questions.map(renderSurveyQuestion).join("")}
+      </div>
+    </div>
+  `).join("");
+
+  return `
+    <h2>2. ${effectiveSurveyMode === "HYBRID" ? "자체 설문" : "설문"}</h2>
+    ${effectiveSurveyMode === "HYBRID" ? `<p>먼저 자체 설문으로 응답을 저장합니다. 제출 오류가 발생하거나 운영자가 구글폼 수집으로 전환해야 하는 경우, 같은 인증 토큰으로 구글폼 대체 이동을 제공합니다.</p>` : ""}
+    <form id="surveyForm">
+      <input name="token" type="hidden">
+      ${sections}
+      <div class="survey-actions">
+        <button id="submitBtn" class="secondary" type="submit">설문 제출</button>
+        ${effectiveSurveyMode === "HYBRID" ? `<button id="fallbackSurveyBtn" type="button" disabled>오류 시 구글폼으로 이동</button>` : ""}
+      </div>
+      <div id="surveyStatus" class="status" role="status" aria-live="polite"></div>
+    </form>
+    <p class="small">관리 확인용 응답 JSON: <a href="/admin/responses" target="_blank" rel="noreferrer">/admin/responses</a> · CSV: <a href="/admin/responses.csv" target="_blank" rel="noreferrer">/admin/responses.csv</a></p>`;
+}
+
 function identityVerificationRedirectPage(selectedSurveyMode = SURVEY_MODE) {
-  const effectiveSurveyMode = selectedSurveyMode === "EXTERNAL" ? "EXTERNAL" : "INTERNAL";
+  const effectiveSurveyMode = normalizeSurveyMode(selectedSurveyMode);
   return `<!doctype html>
 <html lang="ko">
 <head>
@@ -720,7 +1007,7 @@ function identityVerificationRedirectPage(selectedSurveyMode = SURVEY_MODE) {
           location.href = "/go?token=" + encodeURIComponent(data.token);
           return;
         }
-        location.href = "/?survey=internal&token=" + encodeURIComponent(data.token);
+        location.href = "/?survey=" + ${JSON.stringify(effectiveSurveyMode.toLowerCase())} + "&token=" + encodeURIComponent(data.token);
       } catch (error) {
         message.className = "fail";
         message.textContent = error.message || "인증 결과 확인 중 오류가 발생했습니다.";
@@ -735,7 +1022,7 @@ function identityVerificationRedirectPage(selectedSurveyMode = SURVEY_MODE) {
 }
 
 function page(selectedSurveyMode = SURVEY_MODE) {
-  const effectiveSurveyMode = selectedSurveyMode === "EXTERNAL" ? "EXTERNAL" : "INTERNAL";
+  const effectiveSurveyMode = normalizeSurveyMode(selectedSurveyMode);
   const portOneConfig = getPortOneConfigStatus();
   const authReady = AUTH_MODE !== "REAL" || portOneConfig.ready;
   return `<!doctype html>
@@ -813,6 +1100,17 @@ function page(selectedSurveyMode = SURVEY_MODE) {
       gap: 8px;
       font-weight: 700;
     }
+    fieldset {
+      border: 0;
+      margin: 0;
+      padding: 0;
+    }
+    legend {
+      margin: 0 0 10px;
+      padding: 0;
+      font-weight: 800;
+      line-height: 1.45;
+    }
     input, select, textarea {
       width: 100%;
       border: 1px solid var(--line);
@@ -832,6 +1130,10 @@ function page(selectedSurveyMode = SURVEY_MODE) {
       width: 20px;
       min-height: 20px;
     }
+    input[type="radio"] {
+      width: 20px;
+      min-height: 20px;
+    }
     .grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -842,6 +1144,56 @@ function page(selectedSurveyMode = SURVEY_MODE) {
       align-items: start;
       font-weight: 500;
       line-height: 1.55;
+    }
+    .survey-block {
+      border-top: 1px solid var(--line);
+      padding-top: 20px;
+      margin-top: 22px;
+    }
+    .survey-block:first-of-type {
+      border-top: 0;
+      padding-top: 0;
+      margin-top: 0;
+    }
+    .survey-block h3 {
+      margin: 0 0 8px;
+      font-size: 18px;
+      letter-spacing: 0;
+    }
+    .question-list {
+      display: grid;
+      gap: 18px;
+      margin-top: 16px;
+    }
+    .question-group {
+      display: grid;
+      gap: 8px;
+    }
+    .choices {
+      display: grid;
+      gap: 8px;
+    }
+    .choice {
+      display: grid;
+      grid-template-columns: 20px 1fr;
+      align-items: start;
+      gap: 9px;
+      min-height: 32px;
+      font-weight: 500;
+      line-height: 1.5;
+    }
+    .required {
+      display: inline-block;
+      margin-left: 6px;
+      color: var(--danger);
+      font-size: 13px;
+      font-weight: 800;
+    }
+    .survey-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 20px;
     }
     .notice {
       border: 1px solid var(--warn-line);
@@ -920,7 +1272,8 @@ function page(selectedSurveyMode = SURVEY_MODE) {
       <p>본인인증으로 만 ${MIN_AGE}~${MAX_AGE}세 대상 여부를 확인한 뒤 설문을 제출합니다.</p>
       <nav class="mode-switch" aria-label="설문 방식 선택">
         <a class="mode-link ${effectiveSurveyMode === "EXTERNAL" ? "active" : ""}" href="/?survey=external">기본안: 구글폼 연결</a>
-        <a class="mode-link ${effectiveSurveyMode === "INTERNAL" ? "active" : ""}" href="/?survey=internal">예비안: 자체 설문</a>
+        <a class="mode-link ${effectiveSurveyMode === "HYBRID" ? "active" : ""}" href="/?survey=hybrid">대체안: 자체 설문 후 구글폼 백업</a>
+        <a class="mode-link ${effectiveSurveyMode === "INTERNAL" ? "active" : ""}" href="/?survey=internal">예비안: 자체 설문만</a>
         <a class="mode-link" href="/service">서비스 소개</a>
         <a class="mode-link" href="/privacy">개인정보 처리방침</a>
       </nav>
@@ -964,46 +1317,7 @@ function page(selectedSurveyMode = SURVEY_MODE) {
       <p>본인인증을 통과하면 제공해 주신 구글폼 응답 링크로 이동합니다. 구글폼 편집은 운영자가 별도로 <a href="${GOOGLE_FORM_EDIT_URL}" target="_blank" rel="noreferrer">편집 링크</a>에서 진행합니다.</p>
       <p class="small">연결 대상: <a href="${EXTERNAL_SURVEY_URL}" target="_blank" rel="noreferrer">${EXTERNAL_SURVEY_URL}</a></p>
       <button id="externalSurveyBtn" class="secondary" type="button" disabled>인증 후 외부 설문 열기</button>
-      <div id="surveyStatus" class="status" role="status" aria-live="polite"></div>` : `
-      <h2>2. 설문</h2>
-      <form id="surveyForm">
-        <input name="token" type="hidden">
-        <div class="grid">
-          <label>거주 지역
-            <select name="region" required>
-              <option value="">선택</option>
-              <option>서울</option>
-              <option>경기/인천</option>
-              <option>충청</option>
-              <option>호남</option>
-              <option>영남</option>
-              <option>강원/제주</option>
-              <option>기타</option>
-            </select>
-          </label>
-          <label>가장 관심 있는 의제
-            <select name="topic" required>
-              <option value="">선택</option>
-              <option>청년 일자리</option>
-              <option>주거</option>
-              <option>교육</option>
-              <option>지역 균형</option>
-              <option>복지/돌봄</option>
-              <option>기후/환경</option>
-            </select>
-          </label>
-        </div>
-        <label>국민대화에서 가장 다뤄야 할 의견
-          <textarea name="opinion" required placeholder="현장에서 논의되면 좋을 의견을 적어주세요."></textarea>
-        </label>
-        <label class="check">
-          <input name="joinRoundtable" type="checkbox">
-          <span>추후 원탁토론 참여 안내를 받고 싶습니다.</span>
-        </label>
-        <button id="submitBtn" class="secondary" type="submit">설문 제출</button>
-        <div id="surveyStatus" class="status" role="status" aria-live="polite"></div>
-      </form>
-      <p class="small">관리 확인용 응답 JSON: <a href="/admin/responses" target="_blank" rel="noreferrer">/admin/responses</a></p>`}
+      <div id="surveyStatus" class="status" role="status" aria-live="polite"></div>` : renderInternalSurveyForm(effectiveSurveyMode)}
     </section>
   </main>
 
@@ -1022,6 +1336,7 @@ function page(selectedSurveyMode = SURVEY_MODE) {
     const verifyBtn = document.querySelector("#verifyBtn");
     const submitBtn = document.querySelector("#submitBtn");
     const externalSurveyBtn = document.querySelector("#externalSurveyBtn");
+    const fallbackSurveyBtn = document.querySelector("#fallbackSurveyBtn");
     const surveySection = document.querySelector("#surveySection");
     let verifiedToken = "";
     const existingToken = new URLSearchParams(location.search).get("token");
@@ -1035,6 +1350,25 @@ function page(selectedSurveyMode = SURVEY_MODE) {
     function setStatus(node, message, ok) {
       node.textContent = message;
       node.className = "status " + (ok ? "ok" : "fail");
+    }
+
+    function collectSurveyAnswers(form) {
+      const answers = {};
+      const fields = form.querySelectorAll("[data-question-id]");
+      fields.forEach((field) => {
+        const questionId = field.dataset.questionId;
+        if (field.type === "checkbox") {
+          if (!answers[questionId]) answers[questionId] = [];
+          if (field.checked) answers[questionId].push(field.value);
+          return;
+        }
+        if (field.type === "radio") {
+          if (field.checked) answers[questionId] = field.value;
+          return;
+        }
+        answers[questionId] = field.value;
+      });
+      return answers;
     }
 
     verifyForm.addEventListener("submit", async (event) => {
@@ -1112,14 +1446,25 @@ function page(selectedSurveyMode = SURVEY_MODE) {
       });
     }
 
+    if (fallbackSurveyBtn) {
+      fallbackSurveyBtn.addEventListener("click", () => {
+        if (!verifiedToken) {
+          setStatus(surveyStatus, "본인인증을 먼저 완료해 주세요.", false);
+          return;
+        }
+        window.location.href = "/go?token=" + encodeURIComponent(verifiedToken);
+      });
+    }
+
     if (surveyForm) surveyForm.addEventListener("submit", async (event) => {
       event.preventDefault();
       surveyStatus.textContent = "";
       submitBtn.disabled = true;
       try {
-        const formData = new FormData(surveyForm);
-        const payload = Object.fromEntries(formData.entries());
-        payload.joinRoundtable = surveyForm.elements.joinRoundtable.checked;
+        const payload = {
+          token: surveyForm.elements.token.value,
+          answers: collectSurveyAnswers(surveyForm)
+        };
         const response = await fetch("/api/survey", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -1128,6 +1473,7 @@ function page(selectedSurveyMode = SURVEY_MODE) {
         const data = await response.json();
         if (!response.ok || !data.ok) {
           setStatus(surveyStatus, data.message || "설문 제출에 실패했습니다.", false);
+          if (fallbackSurveyBtn) fallbackSurveyBtn.disabled = false;
           return;
         }
         setStatus(surveyStatus, data.message, true);
@@ -1135,6 +1481,7 @@ function page(selectedSurveyMode = SURVEY_MODE) {
         submitBtn.disabled = true;
       } catch (error) {
         setStatus(surveyStatus, error.message || "설문 제출 중 오류가 발생했습니다.", false);
+        if (fallbackSurveyBtn) fallbackSurveyBtn.disabled = false;
         submitBtn.disabled = false;
       }
     });
@@ -1162,6 +1509,7 @@ async function router(req, res) {
   if (req.method === "POST" && url.pathname === "/api/verify") return handleVerify(req, res);
   if (req.method === "POST" && url.pathname === "/api/survey") return handleSubmit(req, res);
   if (req.method === "GET" && url.pathname === "/admin/responses") return handleResponses(req, res);
+  if (req.method === "GET" && url.pathname === "/admin/responses.csv") return handleResponsesCsv(req, res);
   json(res, 404, { message: "Not found" });
 }
 

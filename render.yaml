@@ -10,13 +10,17 @@ services:
       - key: AUTH_MODE
         value: REAL
       - key: SURVEY_MODE
-        value: EXTERNAL
+        value: HYBRID
       - key: MIN_AGE
         value: 20
       - key: MAX_AGE
         value: 39
       - key: EXTERNAL_SURVEY_URL
         value: https://docs.google.com/forms/d/e/1FAIpQLSdHDa0iHyUTuMbnaFCshHEyLupmmSTVs1563bfB4nxG6ij1xg/viewform?usp=dialog
+      - key: RESPONSES_FILE
+        value: ./data/responses.jsonl
+      - key: DATABASE_URL
+        sync: false
       - key: SERVICE_NAME
         value: 코리아스픽스 국민대화 설문
       - key: OPERATOR_NAME

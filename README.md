@@ -32,7 +32,7 @@ AUTH_MODE=MOCK ALLOW_MOCK=1 node server.js
 ```
 
 1. 생년월일 `2000-01-01`, 휴대폰 번호 `01012345678`로 본인인증을 진행합니다.
-2. 설문 영역이 열리면 필수 문항을 입력하고 제출합니다.
+2. 설문 영역이 열리면 이름, 연락처, 개인정보 동의와 필수 문항을 입력하고 제출합니다.
 3. 같은 생년월일과 같은 번호로 다시 인증하면 중복 차단됩니다.
 4. `2007-01-01`처럼 대상 연령 밖의 생년월일을 넣으면 탈락합니다.
 5. 제출 응답은 `/admin/responses`에서 JSON으로 확인합니다.
@@ -72,7 +72,8 @@ REAL 모드는 브라우저에서 포트원 V2 SDK를 로드하고 `PortOne.requ
 
 - 심사용 단일 페이지: `http://localhost:3000/service`
 - 기본안 구글폼 연결: `http://localhost:3000/?survey=external`
-- 예비안 자체 설문: `http://localhost:3000/?survey=internal`
+- 대체안 자체 설문 후 구글폼 백업: `http://localhost:3000/?survey=hybrid`
+- 예비안 자체 설문만: `http://localhost:3000/?survey=internal`
 - 개인정보 처리방침: `http://localhost:3000/privacy`
 - 이용 안내: `http://localhost:3000/terms`
 - 환불 정책: `http://localhost:3000/refund`
@@ -85,14 +86,38 @@ EXTERNAL_SURVEY_URL="https://forms.gle/..." \
 node server.js
 ```
 
-기본안은 본인인증을 통과한 사람에게만 구글 설문지 입장 링크를 열어줍니다. 다만 구글폼은 서버 토큰 검증을 강제할 수 없으므로, 최종 제출 단계의 1인 1응답을 법적으로 강하게 보장해야 한다면 예비안인 `SURVEY_MODE=INTERNAL` 자체 설문 방식으로 전환합니다.
+기본안은 본인인증을 통과한 사람에게만 구글 설문지 입장 링크를 열어줍니다. 다만 구글폼은 서버 토큰 검증을 강제할 수 없으므로, 최종 제출 단계의 1인 1응답을 법적으로 강하게 보장해야 한다면 예비안인 `SURVEY_MODE=INTERNAL` 자체 설문 방식으로 전환합니다. 중간 선택지로 `SURVEY_MODE=HYBRID`를 사용하면 본인인증 후 자체 설문을 먼저 받고, 제출 오류 시 구글폼으로 대체 이동할 수 있습니다.
+
+## 자체 설문 문항
+
+자체 설문 문항은 `survey-schema.json`에 정의되어 있습니다. 문항을 추가하거나 수정할 때는 이 파일의 `sections[].questions[]`를 고치면 화면 렌더링, 서버 필수값 검증, JSON/CSV 아카이브가 함께 반영됩니다.
+
+지원 문항 유형:
+
+- `text`: 단답형
+- `textarea`: 장문형
+- `radio`: 단일 선택
+- `checkbox`: 복수 선택
+
+현재 자체 설문에는 이름, 연락처, 개인정보 수집 및 이용 동의 항목이 포함되어 있습니다.
+
+## 자체 설문 응답 아카이브
+
+자체 설문 또는 하이브리드 자체 설문 응답은 기본적으로 `data/responses.jsonl`에 한 줄 JSON으로 저장됩니다.
+
+확인 URL:
+
+- JSON: `http://localhost:3000/admin/responses`
+- CSV: `http://localhost:3000/admin/responses.csv`
+
+운영 권장안은 Render Postgres입니다. `DATABASE_URL` 환경변수를 설정하면 앱이 Postgres에 `survey_responses` 테이블을 자동 생성하고 응답을 저장합니다. 다문항 응답은 `answers` JSONB 컬럼에 저장되며 CSV 다운로드 시 문항 ID별 컬럼으로 펼쳐집니다. `DATABASE_URL`이 없거나 DB 연결이 실패하면 `data/responses.jsonl` 파일 저장으로 fallback합니다.
 
 ## 설정
 
 - `PORT`: 기본 `3000`
 - `AUTH_MODE`: `MOCK` 또는 `REAL`
 - `ALLOW_MOCK`: `1`일 때만 MOCK 인증 허용
-- `SURVEY_MODE`: `INTERNAL` 또는 `EXTERNAL`
+- `SURVEY_MODE`: `EXTERNAL`, `HYBRID`, 또는 `INTERNAL`
 - `EXTERNAL_SURVEY_URL`: 외부 설문 URL
 - `MIN_AGE`: 기본 `20`
 - `MAX_AGE`: 기본 `39`
@@ -104,6 +129,8 @@ node server.js
 - `OPERATOR_NAME`: 운영 주체명
 - `OPERATOR_CONTACT`: 문의 연락처
 - `BUSINESS_INFO`: 사업자등록번호, 대표자, 주소 등 심사용 사업자 정보
+- `RESPONSES_FILE`: 자체 설문 응답 JSONL 저장 경로
+- `DATABASE_URL`: Render Postgres 또는 외부 Postgres 접속 URL
 
 ## 운영 전 교체해야 할 부분
 

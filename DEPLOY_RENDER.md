@@ -17,6 +17,7 @@ koreaspeaks-survey-gate
 필수 파일:
 
 - `server.js`
+- `survey-schema.json`
 - `package.json`
 - `render.yaml`
 - `README.md`
@@ -41,7 +42,7 @@ Render 서비스의 Environment 탭에서 아래 값을 설정합니다.
 
 ```text
 AUTH_MODE=REAL
-SURVEY_MODE=EXTERNAL
+SURVEY_MODE=HYBRID
 MIN_AGE=20
 MAX_AGE=39
 EXTERNAL_SURVEY_URL=https://docs.google.com/forms/d/e/1FAIpQLSdHDa0iHyUTuMbnaFCshHEyLupmmSTVs1563bfB4nxG6ij1xg/viewform?usp=dialog
@@ -49,9 +50,31 @@ PUBLIC_BASE_URL=https://koreaspeaks-survey-gate.onrender.com
 PORTONE_STORE_ID=포트원에서_발급받은_store_id
 PORTONE_CHANNEL_KEY=포트원에서_발급받은_channel_key
 PORTONE_API_SECRET=포트원에서_발급받은_api_secret
+DATABASE_URL=Render_Postgres_Internal_Database_URL
 ```
 
 포트원 키가 아직 없으면 `PORTONE_*` 값은 비워둘 수 있지만, 실제 본인인증은 시작되지 않습니다.
+
+## 3-1. Render Postgres 설정
+
+하이브리드 또는 자체 설문 응답을 안정적으로 저장하려면 Render Postgres를 추가합니다.
+
+1. Render Dashboard → New → Postgres 선택
+2. 이름 예시: `koreaspeaks-survey-db`
+3. 같은 Region에 생성
+4. 생성 후 Postgres 상세 화면에서 `Internal Database URL` 복사
+5. Web Service `koreaspeaks-survey-gate` → Environment에 아래 값 추가
+
+```text
+DATABASE_URL=복사한_Internal_Database_URL
+```
+
+앱은 시작 시 `survey_responses` 테이블을 자동 생성합니다. 저장 확인:
+
+```text
+https://koreaspeaks-survey-gate.onrender.com/admin/responses
+https://koreaspeaks-survey-gate.onrender.com/admin/responses.csv
+```
 
 ## 4. 포트원 신청/설정에 넣을 URL
 
@@ -75,6 +98,8 @@ https://koreaspeaks-survey-gate.onrender.com/service
 https://koreaspeaks-survey-gate.onrender.com/identity-verification-redirect
 ```
 
+권장 운영안은 `SURVEY_MODE=HYBRID`입니다. 본인인증 후 자체 설문 응답을 DB에 저장하고, 제출 오류가 있을 때만 구글폼으로 대체 이동할 수 있습니다. 구글폼만 사용할 경우 `SURVEY_MODE=EXTERNAL`, 자체 설문만 사용할 경우 `SURVEY_MODE=INTERNAL`로 바꿉니다.
+
 ## 5. 배포 후 확인
 
 설정 상태:
@@ -89,6 +114,12 @@ https://koreaspeaks-survey-gate.onrender.com/api/config
 https://koreaspeaks-survey-gate.onrender.com/?survey=external
 ```
 
+대체안 자체 설문 후 구글폼 백업 흐름:
+
+```text
+https://koreaspeaks-survey-gate.onrender.com/?survey=hybrid
+```
+
 심사용 서비스 소개:
 
 ```text
@@ -99,4 +130,17 @@ https://koreaspeaks-survey-gate.onrender.com/service
 
 ```text
 https://koreaspeaks-survey-gate.onrender.com/?survey=internal
+```
+
+자체 설문 응답 아카이브:
+
+```text
+https://koreaspeaks-survey-gate.onrender.com/admin/responses
+https://koreaspeaks-survey-gate.onrender.com/admin/responses.csv
+```
+
+자체 설문 문항 수정 파일:
+
+```text
+survey-schema.json
 ```
