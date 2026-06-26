@@ -587,6 +587,17 @@ function pageMessage(title, message) {
 </html>`;
 }
 
+function businessFooter() {
+  return `
+  <footer class="wrap">
+    <strong>${OPERATOR_NAME}</strong>
+    <span>대표자: 이병덕</span>
+    <span>사업자등록번호: 107-87-82338</span>
+    <span>주소: 서울특별시 마포구 양화로 81, 408호</span>
+    <span>문의: ${OPERATOR_CONTACT}</span>
+  </footer>`;
+}
+
 function infoShell(title, activePath, content) {
   return `<!doctype html>
 <html lang="ko">
@@ -699,6 +710,11 @@ function infoShell(title, activePath, content) {
       padding: 22px 0 36px;
       color: var(--muted);
       font-size: 14px;
+      line-height: 1.65;
+    }
+    footer span {
+      display: inline-block;
+      margin-right: 12px;
     }
     @media (max-width: 640px) {
       section { padding: 18px; }
@@ -722,9 +738,7 @@ function infoShell(title, activePath, content) {
   <main class="wrap">
     ${content}
   </main>
-  <footer class="wrap">
-    운영: ${OPERATOR_NAME} · 문의: ${OPERATOR_CONTACT}
-  </footer>
+  ${businessFooter()}
 </body>
 </html>`;
 }
@@ -1288,6 +1302,16 @@ function page(selectedSurveyMode = SURVEY_MODE) {
       border-color: var(--brand);
       color: #083d78;
     }
+    footer {
+      padding: 22px 0 36px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.65;
+    }
+    footer span {
+      display: inline-block;
+      margin-right: 12px;
+    }
     @media (max-width: 640px) {
       .grid { grid-template-columns: 1fr; }
       .mode-switch { grid-template-columns: 1fr; }
@@ -1351,6 +1375,7 @@ function page(selectedSurveyMode = SURVEY_MODE) {
       <div id="surveyStatus" class="status" role="status" aria-live="polite"></div>` : renderInternalSurveyForm(effectiveSurveyMode)}
     </section>
   </main>
+  ${businessFooter()}
 
   <script>
     const config = {
