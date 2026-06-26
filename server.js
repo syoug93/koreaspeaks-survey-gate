@@ -24,6 +24,11 @@ const DEFAULT_OPERATOR_CONTACT = "02-3280-0564";
 const RAW_OPERATOR_CONTACT = process.env.OPERATOR_CONTACT || DEFAULT_OPERATOR_CONTACT;
 const OPERATOR_CONTACT = RAW_OPERATOR_CONTACT.replace(/\s/g, "").startsWith("010") ? DEFAULT_OPERATOR_CONTACT : RAW_OPERATOR_CONTACT;
 const BUSINESS_INFO = process.env.BUSINESS_INFO || "사업자등록번호 107-87-82338 / 대표자 이병덕 / 주소 서울특별시 마포구 양화로 81, 408호";
+const REVIEW_SERVICE_NAME = "현장형 국민대화 신청접수 및 설문";
+const REVIEW_OPERATOR_NAME = "코리아스픽스(주)";
+const REVIEW_BUSINESS_INFO = "사업자등록번호 107-87-82338 / 대표자 이병덕 / 주소 서울특별시 마포구 양화로 81, 408호";
+const REVIEW_MIN_AGE = 19;
+const REVIEW_MAX_AGE = 39;
 const RESPONSES_FILE = process.env.RESPONSES_FILE || path.join(__dirname, "data", "responses.jsonl");
 const DATABASE_URL = process.env.DATABASE_URL || "";
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "";
@@ -590,7 +595,7 @@ function pageMessage(title, message) {
 function businessFooter() {
   return `
   <footer class="wrap">
-    <strong>${OPERATOR_NAME}</strong>
+    <strong>${REVIEW_OPERATOR_NAME}</strong>
     <span>대표자: 이병덕</span>
     <span>사업자등록번호: 107-87-82338</span>
     <span>주소: 서울특별시 마포구 양화로 81, 408호</span>
@@ -724,7 +729,7 @@ function infoShell(title, activePath, content) {
 <body>
   <header>
     <div class="wrap">
-      <h1>${SERVICE_NAME}</h1>
+      <h1>${REVIEW_SERVICE_NAME}</h1>
       <p>휴대폰 본인인증으로 연령 조건과 중복 참여 여부를 확인한 뒤 설문 참여를 안내하는 서비스입니다.</p>
       <nav aria-label="서비스 메뉴">
         <a class="${activePath === "/service" ? "active" : ""}" href="/service">서비스 소개</a>
@@ -749,7 +754,7 @@ function servicePage() {
       <h2>서비스 개요</h2>
       <p>세대분야 현장형 국민대화는 대통령직속 국민통합위원회 세대젠더통합정책과에서 국민을 찾아가 우리사회 세대젠더분야의 갈등으로 부상되고 있는 주제에 대해 토론하고, 과제와 대안을 마련하기 위해 마련된 행사입니다.</p>
       <p>이번 행사는 청년을 대상으로 2026 청년이 마주한 대표적 어려움에 대해 토론을 진행하고자 하며, 행사의 참가 신청 접수 및 설문을 위해서 위 서비스가 운영됩니다.</p>
-      <p>응답자는 휴대폰 본인인증을 거친 뒤, 확인된 생년월일 기준 만 ${MIN_AGE}~${MAX_AGE}세에 해당하는 경우에만 설문 참여 화면 또는 구글폼 응답 화면으로 이동합니다.</p>
+      <p>응답자는 휴대폰 본인인증을 거친 뒤, 확인된 생년월일 기준 만 ${REVIEW_MIN_AGE}~${REVIEW_MAX_AGE}세에 해당하는 경우에만 설문 참여 화면 또는 구글폼 응답 화면으로 이동합니다.</p>
       <p>본 서비스는 연령 조건 확인과 1인 1응답 관리를 위해 본인인증 결과의 최소 정보만 사용하며, 인증기관에서 제공하는 CI 또는 DI는 원문으로 저장하지 않고 해시 처리해 중복 여부 확인에만 사용합니다.</p>
       <div class="actions">
         <a class="button" href="/?survey=external">구글폼 연결형 설문 참여</a>
@@ -758,17 +763,17 @@ function servicePage() {
     </section>
     <section>
       <h2>상품/서비스 정보</h2>
-      <p>상품/서비스명: ${SERVICE_NAME}</p>
+      <p>상품/서비스명: ${REVIEW_SERVICE_NAME}</p>
       <p>서비스 유형: 휴대폰 본인인증 기반 온라인 설문 참여 게이트</p>
       <p>제공 내용: 연령 조건 확인, 중복 참여 방지, 대상자 대상 구글 설문지 연결</p>
-      <p>이용 대상: 만 ${MIN_AGE}~${MAX_AGE}세 설문 참여 대상자</p>
+      <p>이용 대상: 만 ${REVIEW_MIN_AGE}~${REVIEW_MAX_AGE}세 설문 참여 대상자</p>
       <p>이용 금액: 응답자 무료</p>
       <p>설문 참여 URL: /?survey=external</p>
     </section>
     <section>
       <h2>사업자 정보</h2>
-      <p>운영 주체: ${OPERATOR_NAME}</p>
-      <p>사업자 정보: ${BUSINESS_INFO}</p>
+      <p>운영 주체: ${REVIEW_OPERATOR_NAME}</p>
+      <p>사업자 정보: ${REVIEW_BUSINESS_INFO}</p>
       <p>고객 문의: ${OPERATOR_CONTACT}</p>
     </section>
     <section>
@@ -788,7 +793,7 @@ function servicePage() {
     </section>
     <section>
       <h2>이용약관</h2>
-      <p>${SERVICE_NAME}는 특정 연령대 참여자를 대상으로 한 설문 참여 안내 서비스입니다. 참여자는 본인인증 및 개인정보 처리 안내에 동의한 뒤 설문에 참여할 수 있습니다.</p>
+      <p>${REVIEW_SERVICE_NAME}는 특정 연령대 참여자를 대상으로 한 설문 참여 안내 서비스입니다. 참여자는 본인인증 및 개인정보 처리 안내에 동의한 뒤 설문에 참여할 수 있습니다.</p>
       <ul>
         <li>대상 연령에 해당하지 않는 경우 설문으로 이동할 수 없습니다.</li>
         <li>동일인으로 확인된 경우 중복 참여가 제한됩니다.</li>
@@ -798,7 +803,7 @@ function servicePage() {
     </section>
     <section>
       <h2>개인정보처리방침</h2>
-      <p>${OPERATOR_NAME}는 ${SERVICE_NAME} 운영을 위해 필요한 최소한의 개인정보만 처리합니다.</p>
+      <p>${REVIEW_OPERATOR_NAME}는 ${REVIEW_SERVICE_NAME} 운영을 위해 필요한 최소한의 개인정보만 처리합니다.</p>
       <ul>
         <li>처리 목적: 설문 참여 대상 연령 확인, 동일인 중복 참여 방지, 설문 응답 접수 및 통계 분석</li>
         <li>본인인증 처리 항목: 생년월일, 성별, CI 또는 DI</li>
@@ -811,7 +816,7 @@ function servicePage() {
     </section>
     <section>
       <h2>환불 정책</h2>
-      <p>${SERVICE_NAME}는 응답자에게 별도 결제를 요구하지 않는 무료 설문 참여 서비스입니다. 따라서 응답자에게 청구되는 상품 대금이나 환불 대상 결제금액은 없습니다.</p>
+      <p>${REVIEW_SERVICE_NAME}는 응답자에게 별도 결제를 요구하지 않는 무료 설문 참여 서비스입니다. 따라서 응답자에게 청구되는 상품 대금이나 환불 대상 결제금액은 없습니다.</p>
       <ul>
         <li>응답자 설문 참여 비용: 무료</li>
         <li>본인인증 비용: 서비스 운영 주체 부담</li>
@@ -825,7 +830,7 @@ function privacyPage() {
   return infoShell("개인정보 처리방침", "/privacy", `
     <section>
       <h2>개인정보 처리방침</h2>
-      <p>${OPERATOR_NAME}는 ${SERVICE_NAME} 운영을 위해 필요한 최소한의 개인정보만 처리합니다. 최종 문안은 발주처와 개인정보 보호책임자 검토 후 확정해야 합니다.</p>
+      <p>${REVIEW_OPERATOR_NAME}는 ${REVIEW_SERVICE_NAME} 운영을 위해 필요한 최소한의 개인정보만 처리합니다. 최종 문안은 발주처와 개인정보 보호책임자 검토 후 확정해야 합니다.</p>
       <h3>처리 목적</h3>
       <ul>
         <li>설문 참여 대상 연령 확인</li>
@@ -852,9 +857,9 @@ function termsPage() {
   return infoShell("이용 안내", "/terms", `
     <section>
       <h2>이용 안내</h2>
-      <p>${SERVICE_NAME}는 특정 연령대 참여자를 대상으로 한 설문 참여 안내 서비스입니다. 참여자는 본인인증 및 개인정보 처리 안내에 동의한 뒤 설문에 참여할 수 있습니다.</p>
+      <p>${REVIEW_SERVICE_NAME}는 특정 연령대 참여자를 대상으로 한 설문 참여 안내 서비스입니다. 참여자는 본인인증 및 개인정보 처리 안내에 동의한 뒤 설문에 참여할 수 있습니다.</p>
       <h3>참여 대상</h3>
-      <p>기본 참여 대상은 만 ${MIN_AGE}~${MAX_AGE}세입니다. 실제 운영 시 발주처 기준에 따라 연령 범위가 변경될 수 있습니다.</p>
+      <p>기본 참여 대상은 만 ${REVIEW_MIN_AGE}~${REVIEW_MAX_AGE}세입니다. 실제 운영 시 발주처 기준에 따라 연령 범위가 변경될 수 있습니다.</p>
       <h3>참여 제한</h3>
       <ul>
         <li>대상 연령에 해당하지 않는 경우 설문으로 이동할 수 없습니다.</li>
@@ -875,7 +880,7 @@ function refundPage() {
   return infoShell("환불 정책", "/refund", `
     <section>
       <h2>환불 정책</h2>
-      <p>${SERVICE_NAME}는 응답자에게 별도 결제를 요구하지 않는 무료 설문 참여 서비스입니다. 따라서 응답자에게 청구되는 상품 대금이나 환불 대상 결제금액은 없습니다.</p>
+      <p>${REVIEW_SERVICE_NAME}는 응답자에게 별도 결제를 요구하지 않는 무료 설문 참여 서비스입니다. 따라서 응답자에게 청구되는 상품 대금이나 환불 대상 결제금액은 없습니다.</p>
       <h3>유료 결제 여부</h3>
       <ul>
         <li>응답자 설문 참여 비용: 무료</li>
@@ -1323,8 +1328,8 @@ function page(selectedSurveyMode = SURVEY_MODE) {
 <body>
   <header>
     <div class="wrap">
-      <h1>${SERVICE_NAME}</h1>
-      <p>본인인증으로 만 ${MIN_AGE}~${MAX_AGE}세 대상 여부를 확인한 뒤 설문을 제출합니다.</p>
+      <h1>${REVIEW_SERVICE_NAME}</h1>
+      <p>본인인증으로 만 ${REVIEW_MIN_AGE}~${REVIEW_MAX_AGE}세 대상 여부를 확인한 뒤 설문을 제출합니다.</p>
       <nav class="mode-switch" aria-label="설문 방식 선택">
         <a class="mode-link ${effectiveSurveyMode === "EXTERNAL" ? "active" : ""}" href="/?survey=external">기본안: 구글폼 연결</a>
         <a class="mode-link ${effectiveSurveyMode === "HYBRID" ? "active" : ""}" href="/?survey=hybrid">대체안: 자체 설문 후 구글폼 백업</a>
