@@ -24,6 +24,7 @@ const OPERATOR_CONTACT = process.env.OPERATOR_CONTACT || "운영 담당자 이�
 const BUSINESS_INFO = process.env.BUSINESS_INFO || "사업자 정보는 계약 주체 기준으로 입력해 주세요.";
 const RESPONSES_FILE = process.env.RESPONSES_FILE || path.join(__dirname, "data", "responses.jsonl");
 const DATABASE_URL = process.env.DATABASE_URL || "";
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "";
 const SURVEY_SCHEMA = JSON.parse(fs.readFileSync(path.join(__dirname, "survey-schema.json"), "utf8"));
 
 const usedPersonHashes = new Set();
@@ -266,6 +267,32 @@ function json(res, statusCode, payload) {
 function html(res, body) {
   res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
   res.end(body);
+}
+
+function unauthorized(res) {
+  res.writeHead(401, {
+    "Content-Type": "text/plain; charset=utf-8",
+    "WWW-Authenticate": 'Basic realm="Survey Admin"'
+  });
+  res.end("Authentication required");
+}
+
+function isAdminAuthorized(req) {
+  if (!ADMIN_PASSWORD) return false;
+  const header = req.headers.authorization || "";
+  const [scheme, encoded] = header.split(" ");
+  if (scheme !== "Basic" || !encoded) return false;
+  const decoded = Buffer.from(encoded, "base64").toString("utf8");
+  const password = decoded.slice(decoded.indexOf(":") + 1);
+  const expected = Buffer.from(ADMIN_PASSWORD);
+  const actual = Buffer.from(password);
+  return actual.length === expected.length && crypto.timingSafeEqual(actual, expected);
+}
+
+function requireAdmin(req, res) {
+  if (isAdminAuthorized(req)) return true;
+  unauthorized(res);
+  return false;
 }
 
 function readBody(req) {
@@ -1526,8 +1553,14 @@ async function router(req, res) {
   if (req.method === "GET" && url.pathname === "/api/config") return handleConfig(req, res);
   if (req.method === "POST" && url.pathname === "/api/verify") return handleVerify(req, res);
   if (req.method === "POST" && url.pathname === "/api/survey") return handleSubmit(req, res);
-  if (req.method === "GET" && url.pathname === "/admin/responses") return handleResponses(req, res);
-  if (req.method === "GET" && url.pathname === "/admin/responses.csv") return handleResponsesCsv(req, res);
+  if (req.method === "GET" && url.pathname === "/admin/responses") {
+    if (!requireAdmin(req, res)) return;
+    return handleResponses(req, res);
+  }
+  if (req.method === "GET" && url.pathname === "/admin/responses.csv") {
+    if (!requireAdmin(req, res)) return;
+    return handleResponsesCsv(req, res);
+  }
   json(res, 404, { message: "Not found" });
 }
 

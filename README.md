@@ -110,6 +110,8 @@ node server.js
 - JSON: `http://localhost:3000/admin/responses`
 - CSV: `http://localhost:3000/admin/responses.csv`
 
+관리자 응답 확인 URL은 `ADMIN_PASSWORD` 환경변수를 설정해야 열립니다. 브라우저 인증창에서 사용자명은 아무 값이나 입력하고, 비밀번호에는 `ADMIN_PASSWORD` 값을 입력합니다.
+
 운영 권장안은 Render Postgres입니다. `DATABASE_URL` 환경변수를 설정하면 앱이 Postgres에 `survey_responses` 테이블을 자동 생성하고 응답을 저장합니다. 다문항 응답은 `answers` JSONB 컬럼에 저장되며 CSV 다운로드 시 문항 ID별 컬럼으로 펼쳐집니다. `DATABASE_URL`이 없거나 DB 연결이 실패하면 `data/responses.jsonl` 파일 저장으로 fallback합니다.
 
 ## 설정
@@ -131,11 +133,11 @@ node server.js
 - `BUSINESS_INFO`: 사업자등록번호, 대표자, 주소 등 심사용 사업자 정보
 - `RESPONSES_FILE`: 자체 설문 응답 JSONL 저장 경로
 - `DATABASE_URL`: Render Postgres 또는 외부 Postgres 접속 URL
+- `ADMIN_PASSWORD`: `/admin/responses`, `/admin/responses.csv` 접근 비밀번호
 
 ## 운영 전 교체해야 할 부분
 
 - 메모리 저장소를 Redis/RDB로 교체
-- `/admin/responses`에 관리자 인증 추가
 - 일회성 토큰을 서명된 JWT 또는 DB 기반 토큰으로 교체
 - HTTPS 배포
 - 개인정보 처리방침과 동의 문안 확정

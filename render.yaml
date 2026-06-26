@@ -21,6 +21,8 @@ services:
         value: ./data/responses.jsonl
       - key: DATABASE_URL
         sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
       - key: SERVICE_NAME
         value: 코리아스픽스 국민대화 설문
       - key: OPERATOR_NAME
