@@ -12,7 +12,7 @@ services:
       - key: SURVEY_MODE
         value: HYBRID
       - key: MIN_AGE
-        value: 20
+        value: 19
       - key: MAX_AGE
         value: 39
       - key: EXTERNAL_SURVEY_URL
@@ -24,13 +24,13 @@ services:
       - key: ADMIN_PASSWORD
         sync: false
       - key: SERVICE_NAME
-        value: 코리아스픽스 국민대화 설문
+        value: 현장형 국민대화 신청접수 및 설문
       - key: OPERATOR_NAME
-        value: 코리아스픽스
+        value: 코리아스픽스(주)
       - key: OPERATOR_CONTACT
-        sync: false
+        value: 02-3280-0564
       - key: BUSINESS_INFO
-        sync: false
+        value: 사업자등록번호 107-87-82338 / 대표자 이병덕 / 주소 서울특별시 마포구 양화로 81, 408호
       - key: PUBLIC_BASE_URL
         sync: false
       - key: PORTONE_STORE_ID

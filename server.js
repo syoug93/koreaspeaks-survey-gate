@@ -12,16 +12,16 @@ const PORTONE_API_SECRET = process.env.PORTONE_API_SECRET || "";
 const PORTONE_STORE_ID = process.env.PORTONE_STORE_ID || "";
 const PORTONE_CHANNEL_KEY = process.env.PORTONE_CHANNEL_KEY || "";
 const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL || "";
-const MIN_AGE = Number(process.env.MIN_AGE || 20);
+const MIN_AGE = Number(process.env.MIN_AGE || 19);
 const MAX_AGE = Number(process.env.MAX_AGE || 39);
 const SURVEY_MODE = (process.env.SURVEY_MODE || "EXTERNAL").toUpperCase();
 const DEFAULT_GOOGLE_FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSdHDa0iHyUTuMbnaFCshHEyLupmmSTVs1563bfB4nxG6ij1xg/viewform?usp=dialog";
 const GOOGLE_FORM_EDIT_URL = "https://docs.google.com/forms/d/1P0m6k7oTFoMrfPY-VAWlsgHWeAYp2UmmjyRNiVsPcLU/edit";
 const EXTERNAL_SURVEY_URL = process.env.EXTERNAL_SURVEY_URL || DEFAULT_GOOGLE_FORM_URL;
-const SERVICE_NAME = process.env.SERVICE_NAME || "코리아스픽스 국민대화 설문";
-const OPERATOR_NAME = process.env.OPERATOR_NAME || "코리아스픽스";
-const OPERATOR_CONTACT = process.env.OPERATOR_CONTACT || "운영 담당자 이메일을 입력해 주세요";
-const BUSINESS_INFO = process.env.BUSINESS_INFO || "사업자 정보는 계약 주체 기준으로 입력해 주세요.";
+const SERVICE_NAME = process.env.SERVICE_NAME || "현장형 국민대화 신청접수 및 설문";
+const OPERATOR_NAME = process.env.OPERATOR_NAME || "코리아스픽스(주)";
+const OPERATOR_CONTACT = process.env.OPERATOR_CONTACT || "02-3280-0564";
+const BUSINESS_INFO = process.env.BUSINESS_INFO || "사업자등록번호 107-87-82338 / 대표자 이병덕 / 주소 서울특별시 마포구 양화로 81, 408호";
 const RESPONSES_FILE = process.env.RESPONSES_FILE || path.join(__dirname, "data", "responses.jsonl");
 const DATABASE_URL = process.env.DATABASE_URL || "";
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "";
@@ -731,7 +731,9 @@ function servicePage() {
   return infoShell("서비스 소개", "/service", `
     <section>
       <h2>서비스 개요</h2>
-      <p>${SERVICE_NAME}는 현장형 국민대화 설문 참여 대상자를 확인하기 위한 온라인 게이트입니다. 응답자는 휴대폰 본인인증을 거친 뒤, 확인된 생년월일 기준 만 ${MIN_AGE}~${MAX_AGE}세에 해당하는 경우에만 설문 참여 화면 또는 구글폼 응답 화면으로 이동합니다.</p>
+      <p>세대분야 현장형 국민대화는 대통령직속 국민통합위원회 세대젠더통합정책과에서 국민을 찾아가 우리사회 세대젠더분야의 갈등으로 부상되고 있는 주제에 대해 토론하고, 과제와 대안을 마련하기 위해 마련된 행사입니다.</p>
+      <p>이번 행사는 청년을 대상으로 2026 청년이 마주한 대표적 어려움에 대해 토론을 진행하고자 하며, 행사의 참가 신청 접수 및 설문을 위해서 위 서비스가 운영됩니다.</p>
+      <p>응답자는 휴대폰 본인인증을 거친 뒤, 확인된 생년월일 기준 만 ${MIN_AGE}~${MAX_AGE}세에 해당하는 경우에만 설문 참여 화면 또는 구글폼 응답 화면으로 이동합니다.</p>
       <p>본 서비스는 연령 조건 확인과 1인 1응답 관리를 위해 본인인증 결과의 최소 정보만 사용하며, 인증기관에서 제공하는 CI 또는 DI는 원문으로 저장하지 않고 해시 처리해 중복 여부 확인에만 사용합니다.</p>
       <div class="actions">
         <a class="button" href="/?survey=external">구글폼 연결형 설문 참여</a>
@@ -1295,7 +1297,7 @@ function page(selectedSurveyMode = SURVEY_MODE) {
 <body>
   <header>
     <div class="wrap">
-      <h1>코리아스픽스 국민대화 설문</h1>
+      <h1>${SERVICE_NAME}</h1>
       <p>본인인증으로 만 ${MIN_AGE}~${MAX_AGE}세 대상 여부를 확인한 뒤 설문을 제출합니다.</p>
       <nav class="mode-switch" aria-label="설문 방식 선택">
         <a class="mode-link ${effectiveSurveyMode === "EXTERNAL" ? "active" : ""}" href="/?survey=external">기본안: 구글폼 연결</a>
