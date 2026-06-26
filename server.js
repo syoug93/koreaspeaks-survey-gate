@@ -1327,7 +1327,8 @@ function page(selectedSurveyMode = SURVEY_MODE) {
       storeId: ${JSON.stringify(PORTONE_STORE_ID)},
       channelKey: ${JSON.stringify(PORTONE_CHANNEL_KEY)},
       publicBaseUrl: ${JSON.stringify(PUBLIC_BASE_URL)},
-      surveyMode: ${JSON.stringify(effectiveSurveyMode)}
+      surveyMode: ${JSON.stringify(effectiveSurveyMode)},
+      minAge: ${JSON.stringify(MIN_AGE)}
     };
     const verifyForm = document.querySelector("#verifyForm");
     const surveyForm = document.querySelector("#surveyForm");
@@ -1389,7 +1390,13 @@ function page(selectedSurveyMode = SURVEY_MODE) {
           const requestPayload = {
             storeId: config.storeId,
             channelKey: config.channelKey,
-            identityVerificationId
+            identityVerificationId,
+            bypass: {
+              danal: {
+                AGELIMIT: config.minAge,
+                CPTITLE: config.publicBaseUrl || location.origin
+              }
+            }
           };
           const baseUrl = config.publicBaseUrl || location.origin;
           if (baseUrl.startsWith("https://")) {
