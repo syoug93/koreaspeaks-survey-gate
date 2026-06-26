@@ -1492,6 +1492,17 @@ function page(selectedSurveyMode = SURVEY_MODE) {
 
 async function router(req, res) {
   const url = new URL(req.url, `http://${req.headers.host}`);
+  if (req.method === "HEAD") {
+    const htmlPaths = new Set(["/", "/service", "/privacy", "/terms", "/refund", "/identity-verification-redirect"]);
+    if (htmlPaths.has(url.pathname)) {
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      return res.end();
+    }
+    if (url.pathname === "/api/config") {
+      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+      return res.end();
+    }
+  }
   if (req.method === "GET" && url.pathname === "/service") return html(res, servicePage());
   if (req.method === "GET" && url.pathname === "/privacy") return html(res, privacyPage());
   if (req.method === "GET" && url.pathname === "/terms") return html(res, termsPage());
